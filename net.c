@@ -8,6 +8,7 @@
 #include "util.h"
 #include "net.h"
 #include "ip.h"
+#include "icmp.h"
 
 static struct net_device *devices;
 static struct net_protocol *protocols;
@@ -34,6 +35,38 @@ net_device_register(struct net_device *dev)
     devices = dev;
     infof("registerd, dev=%s, type=0x%04x", dev->name, dev->type);
     return 0;
+}
+
+int
+net_device_add_iface(struct net_device *dev, struct net_iface *iface)
+{
+    struct net_iface *entry;
+
+    // 重複登録のチェック
+    for(entry = dev->ifaces; entry; entry = entry->next) {
+        if (iface->family == entry->family) {
+            errorf("already exist, dev=%s, family=%d", dev->name, entry->family);
+            return -1;
+        }
+    }
+    // デバイスのインターフェイスリストの先頭にifaceを挿入
+    iface->next = dev->ifaces;
+    iface->dev = dev;
+    dev->ifaces = iface;
+    return 0;
+}
+
+struct net_iface *
+net_device_get_iface(struct net_device *dev, int family)
+{
+    // デバイスのインターフェイスリストを検索しfamilyが一致するインターフェイスを返す
+    struct net_iface *entry;
+    for (entry = dev->ifaces; entry; entry = entry->next) {
+        if (entry->family == family) {
+            break;
+        }
+    }
+    return  entry;
 }
 
 static int
@@ -80,7 +113,7 @@ net_device_output(struct net_device *dev, uint16_t type, const uint8_t *data, si
         return -1;
     }
     if (len > dev->mtu) {
-        errorf("too long, dev=%, mtu=%u, len=%zu", dev->name, dev->mtu, len);
+        errorf("too long, dev=%s, mtu=%u, len=%zu", dev->name, dev->mtu, len);
         return -1;
     }
     debugf("dev=%s, type=0x%04x, len=%zu", dev->name, type, len);
@@ -152,7 +185,7 @@ net_input_handler(uint16_t type, const uint8_t *data, size_t len, struct net_dev
             int_raise_irq(INTR_IRQ_SOFTIRQ);
         }
     }
-    infof("unsupported protocol type=0x%04x", type);
+    //infof("unsupported protocol type=0x%04x", type);
     return 0;
 }
 
@@ -225,6 +258,11 @@ net_init(void)
     // IPを初期化
     if (ip_init() == -1) {
         errorf("ip_init() failure");
+        return -1;
+    }
+    // ICMPを登録
+    if (icmp_init() == -1) {
+        errorf("icmp_init() failure");
         return -1;
     }
     infof("initialized");

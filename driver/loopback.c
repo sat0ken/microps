@@ -101,7 +101,7 @@ loopback_init(void)
     struct net_device *dev;
     struct loopback *lo;
 
-    // Exercise 3-1 デバイスの生成とパラメータの設定
+    // デバイスの生成とパラメータの設定
     dev = net_device_alloc();
     if (!dev) {
         errorf("net_device_alloc() failure");
@@ -128,7 +128,7 @@ loopback_init(void)
     queue_init(&lo->queue);
     dev->priv = lo;
 
-    // Exercise 3-2 デバイスと登録と割り込みハンドラの設定
+    // デバイスと登録と割り込みハンドラの設定
     intr_request_irq(LOOPBACK_IRQ, loopback_isr, INTR_IRQ_SHARED, dev->name, dev);
     debugf("initialized, dev=%s", dev->name);
     return dev;
