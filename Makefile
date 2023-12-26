@@ -7,8 +7,9 @@ OBJS = util.o \
 	net.o \
 	ip.o \
 	icmp.o \
+	ether.o \
 
-TESTS = test/step11.exe \
+TESTS = test/step12.exe \
 #		test/step2.exe \
 #		test/step3.exe \
 #		test/step4.exe \
@@ -22,6 +23,7 @@ ifeq ($(shell uname),Linux)
   # Linux specific settings
   BASE = platform/linux
   CFLAGS := $(CFLAGS) -pthread -iquote $(BASE)
+  DRIVERS := $(DRIVERS) $(BASE)/driver/ether_tap.o
   OBJS := $(OBJS) $(BASE)/intr.o
 endif
 
@@ -50,3 +52,8 @@ clean:
 
 rm:
 	rm -f ./test/*.exe -f ./test/*.o
+
+tap:
+	sudo ip tuntap add mode tap user $(USER) name tap0
+	sudo ip addr add 192.0.2.1/24 dev tap0
+	sudo ip link set tap0 up
