@@ -60,7 +60,7 @@ arp_cache_delete(struct arp_cache *cache)
     char ip[IP_ADDR_STR_LEN];
     char mac[ETHER_ADDR_LEN];
 
-    debugf("DELETE: pa$s, ha=%s", ip_addr_ntop(cache->pa, ip, sizeof(ip)), ether_addr_ntop(cache->ha, mac, sizeof(mac)));
+    debugf("DELETE: pa=%s, ha=%s", ip_addr_ntop(cache->pa, ip, sizeof(ip)), ether_addr_ntop(cache->ha, mac, sizeof(mac)));
     cache->state = ARP_CACHE_STATE_FREE;
     cache->pa = 0;
     memset(cache->ha, 0, ETHER_ADDR_LEN);
@@ -290,11 +290,35 @@ arp_resolve(struct net_iface *iface, ip_addr_t pa, uint8_t *ha)
     return ARP_RESOLVE_FOUND;
 }
 
+static void
+arp_timmer_handler(void)
+{
+    struct arp_cache *entry;
+    struct timeval now, diff;
+    mutex_lock(&mutex);
+    gettimeofday(&now, NULL);
+    for (entry = arp_cache_list; entry < tailof(arp_cache_list); entry++) {
+        if (entry->state != ARP_CACHE_STATE_FREE && entry->state != ARP_CACHE_STATE_STATIC) {
+            timersub(&now, &entry->timestamp, &diff);
+            if (diff.tv_sec > ARP_CACHE_TIMEOUT) {
+                arp_cache_delete(entry);
+            }
+        }
+    }
+    mutex_unlock(&mutex);
+}
+
 int
 arp_init(void)
 {
+    struct timeval interval = {1, 0};
     if (net_protocol_register(NET_PROTOCOL_TYPE_ARP, arp_input) == -1){
         errorf("net_protocol_register() failure");
+        return -1;
+    }
+    // タイマーを登録
+    if (net_timer_register(interval, arp_timmer_handler) == -1) {
+        errorf("net_timer_register() failure");
         return -1;
     }
 

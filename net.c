@@ -13,6 +13,7 @@
 
 static struct net_device *devices;
 static struct net_protocol *protocols;
+static struct net_timer *timers;
 
 struct net_device *
 net_device_alloc(void)
@@ -271,5 +272,46 @@ net_init(void)
         return -1;
     }
     infof("initialized");
+    return 0;
+}
+
+int
+net_timer_register(struct timeval interval, void (*handler)(void))
+{
+    struct net_timer *timer;
+
+    timer = memory_alloc(sizeof(*timer));
+    if (!timer) {
+        errorf("memoay_alloc() failure");
+        return -1;
+    }
+    // タイマーに値を設定
+    gettimeofday(&timer->last, NULL);
+    timer->interval = interval;
+    timer->handler = handler;
+    // タイマーリストの先頭に追加
+    timer->next = timers;
+    timers = timer;
+
+    infof("registerd interval={%d, %d}", interval.tv_sec, interval.tv_usec);
+    return 0;
+}
+
+int
+net_timer_handler(void)
+{
+    struct net_timer *timer;
+    struct timeval now, diff;
+
+    for(timer = timers; timer; timer = timer->next) {
+        // 最後のタイマー発火から経過時間を求める
+        gettimeofday(&now, NULL);
+        timersub(&now, &timer->last, &diff);
+        if (timercmp(&timer->interval, &diff, <) != 0) {
+            // 発火時刻を迎えていれば登録されている関数を呼ぶ
+            timer->handler();
+            timer->last = now;
+        }
+    }
     return 0;
 }

@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <sys/time.h>
 
 #ifndef IFNAMSIZ
 #define IFNAMSIZ 16
@@ -76,6 +77,13 @@ struct net_protocol_queue_entry {
     uint8_t data[];
 };
 
+struct net_timer {
+    struct net_timer *next;
+    struct timeval interval;
+    struct timeval last;
+    void (*handler)(void);
+};
+
 extern struct net_device *
 net_device_alloc(void);
 
@@ -108,5 +116,11 @@ net_shutdown(void);
 
 extern int
 net_init(void);
+
+extern int
+net_timer_register(struct timeval interval, void (*handler)(void));
+
+extern int
+net_timer_handler(void);
 
 #endif
