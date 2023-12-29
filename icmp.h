@@ -21,7 +21,7 @@
 struct icmp_hdr {
     uint8_t  type;
     uint8_t  code;
-    uint8_t  sum;
+    uint16_t sum;
     uint32_t values;
 };
 
