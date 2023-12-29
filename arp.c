@@ -58,7 +58,7 @@ static void
 arp_cache_delete(struct arp_cache *cache)
 {
     char ip[IP_ADDR_STR_LEN];
-    char mac[ETHER_ADDR_LEN];
+    char mac[ETHER_ADDR_STR_LEN];
 
     debugf("DELETE: pa=%s, ha=%s", ip_addr_ntop(cache->pa, ip, sizeof(ip)), ether_addr_ntop(cache->ha, mac, sizeof(mac)));
     cache->state = ARP_CACHE_STATE_FREE;
@@ -126,7 +126,7 @@ arp_cache_insert(ip_addr_t pa, const uint8_t *ha)
 {
     struct arp_cache *cache;
     char ip[IP_ADDR_STR_LEN];
-    char mac[ETHER_ADDR_LEN];
+    char mac[ETHER_ADDR_STR_LEN];
 
     cache = arp_cache_alloc();
     if (!cache) {
