@@ -117,7 +117,7 @@ arp_cache_update(ip_addr_t pa, const uint8_t *ha)
     memcpy(cache->ha, ha, ETHER_ADDR_LEN);
     gettimeofday(&cache->timestamp, NULL);
 
-    debugf("UPDATE: pa$s, ha=%s", ip_addr_ntop(cache->pa, ip, sizeof(ip)), ether_addr_ntop(cache->ha, mac, sizeof(mac)));
+    debugf("UPDATE: pa=%s, ha=%s", ip_addr_ntop(cache->pa, ip, sizeof(ip)), ether_addr_ntop(cache->ha, mac, sizeof(mac)));
     return cache;
 }
 
@@ -142,6 +142,26 @@ arp_cache_insert(ip_addr_t pa, const uint8_t *ha)
 }
 
 static int
+arp_request(struct net_iface *iface, ip_addr_t tpa)
+{
+    struct arp_ether_ip request;
+    // ARPリクエストの生成
+    request.hdr.hrd = hton16(ARP_HRD_ETHER);
+    request.hdr.pro = hton16(ARP_PRO_IP);
+    request.hdr.hln = ETHER_ADDR_LEN;
+    request.hdr.pln = IP_ADDR_LEN;
+    request.hdr.op = hton16(ARP_OP_REQUEST);
+    memcpy(request.sha, iface->dev->addr, ETHER_ADDR_LEN);
+    memcpy(request.spa, &((struct ip_iface *)iface)->unicast, IP_ADDR_LEN);
+    memcpy(request.tha, ETHER_ADDR_BROADCAST, ETHER_ADDR_LEN);
+    memcpy(request.tpa, &tpa, IP_ADDR_LEN);
+    debugf("dev=%s, opcode=%s(0x%04x), len=%zu", iface->dev->name, arp_opcode_ntoa(request.hdr.op), ntoh16(request.hdr.op), sizeof(request));
+    arp_dump((uint8_t *)&request, sizeof(request));
+
+    return net_device_output(iface->dev, ETHER_TYPE_ARP, (uint8_t *)&request, sizeof(request), iface->dev->broadcast);
+}
+
+static int
 arp_reply(struct net_iface *iface, const uint8_t *tha, ip_addr_t tpa, const uint8_t *dst)
 {
     struct arp_ether_ip reply;
@@ -158,7 +178,7 @@ arp_reply(struct net_iface *iface, const uint8_t *tha, ip_addr_t tpa, const uint
     memcpy(reply.tha, tha, ETHER_ADDR_LEN);
     memcpy(reply.tpa, &tpa, IP_ADDR_LEN);
 
-    debugf("dev=%s, len=%zu", iface->dev->name, sizeof(reply));
+    debugf("dev=%s, opcode=%s(0x%04x), len=%zu", iface->dev->name, arp_opcode_ntoa(reply.hdr.op), ntoh16(reply.hdr.op), sizeof(reply));
     arp_dump((uint8_t *)&reply, sizeof(reply));
 
     return net_device_output(iface->dev, ETHER_TYPE_ARP, (uint8_t *)&reply, sizeof(reply), dst);
@@ -229,7 +249,7 @@ arp_resolve(struct net_iface *iface, ip_addr_t pa, uint8_t *ha)
 {
     struct arp_cache *cache;
     char ip[IP_ADDR_STR_LEN];
-    char mac[ETHER_ADDR_LEN];
+    char mac[ETHER_ADDR_STR_LEN];
 
     // インターフェイスがEthernetであることを確認
     if (iface->dev->type != NET_DEVICE_TYPE_ETHERNET) {
@@ -244,9 +264,24 @@ arp_resolve(struct net_iface *iface, ip_addr_t pa, uint8_t *ha)
     mutex_lock(&mutex);
     cache = arp_cache_select(pa);
     if (!cache) {
+        // 新しいエントリのメモリを確保
+        cache = arp_cache_alloc();
+        if (!cache) {
+            return ARP_RESOLVE_ERROR;
+        }
+        cache->state = ARP_CACHE_STATE_INCOMPLETE;
+        cache->pa = pa;
+        gettimeofday(&cache->timestamp, NULL);
         errorf("cache not found, pa=%s", ip_addr_ntop(pa, ip, sizeof(ip)));
         mutex_unlock(&mutex);
-        return ARP_RESOLVE_ERROR;
+        arp_request(iface, pa);
+        return ARP_CACHE_STATE_INCOMPLETE;
+    }
+    // INCOMPELETEのままなら念のため再送
+    if (cache->state == ARP_CACHE_STATE_INCOMPLETE) {
+        mutex_unlock(&mutex);
+        arp_request(iface, pa);
+        return ARP_CACHE_STATE_INCOMPLETE;
     }
     memcpy(ha, cache->ha, ETHER_ADDR_LEN);
     mutex_unlock(&mutex);
