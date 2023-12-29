@@ -6,6 +6,23 @@
 #include "ip.h"
 #include "icmp.h"
 
+// ICMPヘッダ構造体
+struct icmp_hdr {
+    uint8_t  type;
+    uint8_t  code;
+    uint16_t sum;
+    uint32_t values;
+};
+
+// Echo/EchoReplyメッセージ用構造体
+struct icmp_echo {
+    uint8_t  type;
+    uint8_t  code;
+    uint16_t sum;
+    uint16_t id;
+    uint16_t seq;
+};
+
 char *
 icmp_type_ntoa(uint8_t type)
 {

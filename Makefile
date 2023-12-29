@@ -10,7 +10,7 @@ OBJS = util.o \
        ip.o \
        icmp.o \
 
-TESTS = test/step16.exe \
+TESTS = test/step17.exe \
 
 CFLAGS := $(CFLAGS) -g -W -Wall -Wno-unused-parameter -iquote .
 
@@ -52,3 +52,8 @@ tap:
 	sudo ip tuntap add mode tap user $(USER) name tap0
 	sudo ip addr add 192.0.2.1/24 dev tap0
 	sudo ip link set tap0 up
+
+route:
+	sudo iptables -A FORWARD -o tap0 -j ACCEPT
+	sudo iptables -A FORWARD -i tap0 -j ACCEPT
+	sudo iptables -t nat -A POSTROUTING -s 192.0.2.0/24 -o wlp0s20f3 -j MASQUERADE

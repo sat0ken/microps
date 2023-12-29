@@ -56,6 +56,15 @@ struct ip_protocol {
     void (*handler)(const uint8_t *data, size_t len, ip_addr_t src, ip_addr_t dst, struct ip_iface *iface);
 };
 
+// IPルーティング用の構造体
+struct ip_route {
+    struct ip_route *next;
+    ip_addr_t network;
+    ip_addr_t netmask;
+    ip_addr_t nexthop;
+    struct ip_iface *iface;
+};
+
 extern int
 ip_init(void);
 
@@ -79,5 +88,11 @@ ip_output(uint8_t protocol, const uint8_t *data, size_t len, ip_addr_t src, ip_a
 
 extern int
 ip_protocol_register(uint8_t type, void(*handler)(const uint8_t *data, size_t len, ip_addr_t src, ip_addr_t dst, struct ip_iface *iface));
+
+extern int
+ip_route_set_default_gateway(struct ip_iface *iface, const char *gateway);
+
+extern struct ip_iface *
+ip_route_get_iface(ip_addr_t dst);
 
 #endif
