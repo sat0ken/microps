@@ -8,6 +8,7 @@
 #include "util.h"
 #include "net.h"
 #include "ip.h"
+#include "arp.h"
 
 static struct ip_iface *interfaces;
 static struct ip_protocol *ip_protocols;
@@ -159,7 +160,6 @@ ip_input(const uint8_t *data, size_t len, struct net_device *dev)
 int
 ip_init(void)
 {
-    infof("IPを初期化");
     if (net_protocol_register(NET_PROTOCOL_TYPE_IP, ip_input) == -1) {
         errorf("net_protocol_register() failure");
         return -1;
@@ -238,14 +238,17 @@ static int
 ip_output_device(struct ip_iface *iface, const uint8_t *data, size_t len, ip_addr_t dst)
 {
     uint8_t hwaddr[NET_DEVICE_ADDR_LEN] = {};
+    int ret;
 
     // ARPで宛先IPアドレスのMACアドレスを取得
     if (NET_IFACE(iface)->dev->flags & NET_DEVICE_FLAG_NEED_ARP) {
         if (dst == iface->broadcast || dst == IP_ADDR_BROADCAST) {
             memcpy(hwaddr, NET_IFACE(iface)->dev->broadcast, NET_IFACE(iface)->dev->alen);
         } else {
-            errorf("arp does not implement");
-            return -1;
+            ret = arp_resolve(NET_IFACE(iface), dst, hwaddr);
+            if (ret != ARP_RESOLVE_FOUND) {
+                return ret;
+            }
         }
     }
     // デバイスから送信

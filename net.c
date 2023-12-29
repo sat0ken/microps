@@ -185,7 +185,7 @@ net_input_handler(uint16_t type, const uint8_t *data, size_t len, struct net_dev
             int_raise_irq(INTR_IRQ_SOFTIRQ);
         }
     }
-    infof("unsupported protocol type=0x%04x", type);
+    //infof("unsupported protocol type=0x%04x", type);
     return 0;
 }
 
