@@ -6,10 +6,10 @@
 #include "platform/linux/platform.h"
 #include "platform/linux/intr.h"
 #include "util.h"
-//#include "net.h"
 #include "ip.h"
 #include "icmp.h"
 #include "arp.h"
+#include "udp.h"
 
 static struct net_device *devices;
 static struct net_protocol *protocols;
@@ -269,6 +269,11 @@ net_init(void)
     // ICMPを登録
     if (icmp_init() == -1) {
         errorf("icmp_init() failure");
+        return -1;
+    }
+    // UDPを登録
+    if (udp_init() == -1) {
+        errorf("udp_init() failure");
         return -1;
     }
     infof("initialized");

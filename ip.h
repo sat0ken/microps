@@ -16,6 +16,7 @@
 
 #define IP_ADDR_LEN 4
 #define IP_ADDR_STR_LEN 16
+#define IP_ENDPOINT_STR_LEN (IP_ADDR_STR_LEN + 6)
 
 #define IP_PROTOCOL_ICMP 1
 #define IP_PROTOCOL_TCP  6
@@ -65,6 +66,11 @@ struct ip_route {
     struct ip_iface *iface;
 };
 
+struct ip_endpoint {
+    ip_addr_t addr;
+    uint16_t port;
+};
+
 extern int
 ip_init(void);
 
@@ -94,5 +100,11 @@ ip_route_set_default_gateway(struct ip_iface *iface, const char *gateway);
 
 extern struct ip_iface *
 ip_route_get_iface(ip_addr_t dst);
+
+extern int
+ip_endpoint_pton(const char *p, struct ip_endpoint *n);
+
+extern char *
+ip_endpoint_ntop(const struct ip_endpoint *n, char *p, size_t size);
 
 #endif
