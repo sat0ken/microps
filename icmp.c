@@ -6,49 +6,6 @@
 #include "ip.h"
 #include "icmp.h"
 
-void
-icmp_input(const uint8_t *data, size_t len, ip_addr_t src, ip_addr_t dst, struct ip_iface *iface)
-{
-    struct icmp_hdr *hdr;
-    char addr1[IP_ADDR_STR_LEN];
-    char addr2[IP_ADDR_STR_LEN];
-
-    // 入力データの長さ確認
-    if (len < sizeof(*hdr)) {
-        errorf("icmp message length is too short");
-        return;
-    }
-    hdr = (struct icmp_hdr *)data;
-    // チェックサムの検証
-    if (cksum16((uint16_t *)data, len, 0) != 0) {
-        errorf("checksum err, sum=0x%04x, verify=0x%04x", ntoh16(hdr->sum), ntoh16(cksum16((uint16_t *)data, len, -hdr->sum)));
-        return;
-    }
-
-    debugf("%s => %s, len=%zu", ip_addr_ntop(src, addr1, sizeof(addr1)), ip_addr_ntop(dst, addr2, sizeof(addr2)), len);
-    debugdump(data, len);
-    icmp_dump(data, len);
-
-    switch (hdr->type) {
-        case ICMP_TYPE_ECHO:
-            // ECHO Replyを返す
-            icmp_output(ICMP_TYPE_ECHOREPLY, hdr->code, hdr->values, (uint8_t *)(hdr + 1), len - sizeof(*hdr), dst, src);
-            break;
-        default:
-            break;
-    }
-}
-
-int
-icmp_init(void)
-{
-    if (ip_protocol_register(IP_PROTOCOL_ICMP, icmp_input) == -1) {
-        errorf("ip_protocol_register() failure");
-        return -1;
-    }
-    return 0;
-}
-
 char *
 icmp_type_ntoa(uint8_t type)
 {
@@ -107,6 +64,50 @@ icmp_dump(const uint8_t *data, size_t len)
 #endif
     funlockfile(stderr);
 }
+
+static void
+icmp_input(const uint8_t *data, size_t len, ip_addr_t src, ip_addr_t dst, struct ip_iface *iface)
+{
+    struct icmp_hdr *hdr;
+    char addr1[IP_ADDR_STR_LEN];
+    char addr2[IP_ADDR_STR_LEN];
+
+    // 入力データの長さ確認
+    if (len < sizeof(*hdr)) {
+        errorf("icmp message length is too short");
+        return;
+    }
+    hdr = (struct icmp_hdr *)data;
+    // チェックサムの検証
+    if (cksum16((uint16_t *)data, len, 0) != 0) {
+        errorf("checksum err, sum=0x%04x, verify=0x%04x", ntoh16(hdr->sum), ntoh16(cksum16((uint16_t *)data, len, -hdr->sum)));
+        return;
+    }
+
+    debugf("%s => %s, len=%zu", ip_addr_ntop(src, addr1, sizeof(addr1)), ip_addr_ntop(dst, addr2, sizeof(addr2)), len);
+    debugdump(data, len);
+    icmp_dump(data, len);
+
+    switch (hdr->type) {
+        case ICMP_TYPE_ECHO:
+            // ECHO Replyを返す
+            icmp_output(ICMP_TYPE_ECHOREPLY, hdr->code, hdr->values, (uint8_t *)(hdr + 1), len - sizeof(*hdr), iface->unicast, src);
+            break;
+        default:
+            break;
+    }
+}
+
+int
+icmp_init(void)
+{
+    if (ip_protocol_register(IP_PROTOCOL_ICMP, icmp_input) == -1) {
+        errorf("ip_protocol_register() failure");
+        return -1;
+    }
+    return 0;
+}
+
 
 int
 icmp_output(uint8_t type, uint8_t code, uint32_t values, const uint8_t *data, size_t len, ip_addr_t src, ip_addr_t dst)

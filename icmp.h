@@ -37,15 +37,6 @@ struct icmp_echo {
 extern int
 icmp_init(void);
 
-extern void
-icmp_input(const uint8_t *data, size_t len, ip_addr_t src, ip_addr_t dst, struct ip_iface *iface);
-
-extern char *
-icmp_type_ntoa(uint8_t);
-
-extern void
-icmp_dump(const uint8_t *data, size_t len);
-
 extern int
 icmp_output(uint8_t type, uint8_t code, uint32_t values, const uint8_t *data, size_t len, ip_addr_t src, ip_addr_t dst);
 
