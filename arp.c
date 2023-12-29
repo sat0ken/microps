@@ -105,7 +105,7 @@ arp_cache_update(ip_addr_t pa, const uint8_t *ha)
 {
     struct arp_cache *cache;
     char ip[IP_ADDR_STR_LEN];
-    char mac[ETHER_ADDR_LEN];
+    char mac[ETHER_ADDR_STR_LEN];
     // エントリを検索
     cache = arp_cache_select(pa);
     if (!cache) {

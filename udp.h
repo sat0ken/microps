@@ -11,6 +11,9 @@
 #define UDP_PCB_STATE_OPEN 1
 #define UDP_PCB_STATE_CLOSING 2
 
+#define UDP_SOURCE_PORT_MIN 49152
+#define UDP_SOURCE_PORT_MAX 65535
+
 struct pseudo_hdr {
     uint32_t src_addr;
     uint32_t dst_addr;
@@ -30,6 +33,7 @@ struct udp_pcb {
     int state;
     struct ip_endpoint local;
     struct queue_head queue;
+    int wc;     // waitカウント(PCBを使用中のスレッド数)
 };
 
 struct udp_query_entry {
@@ -52,5 +56,11 @@ udp_bind(int id, struct ip_endpoint *local);
 
 extern int
 udp_close(int id);
+
+extern ssize_t
+udp_sendto(int fd, uint8_t *buf, size_t len, struct ip_endpoint *foreign);
+
+extern ssize_t
+udp_recvfrom(int fd, uint8_t *buf, size_t len, struct ip_endpoint *foreign);
 
 #endif
