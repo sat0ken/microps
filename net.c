@@ -6,9 +6,10 @@
 #include "platform/linux/platform.h"
 #include "platform/linux/intr.h"
 #include "util.h"
-#include "net.h"
+//#include "net.h"
 #include "ip.h"
 #include "icmp.h"
+#include "arp.h"
 
 static struct net_device *devices;
 static struct net_protocol *protocols;
@@ -130,7 +131,7 @@ net_protocol_register(uint16_t type, void (*handler)(const uint8_t *data, size_t
 {
     struct net_protocol *proto;
     // 重複登録の確認
-    for (proto = protocols; proto; proto->next) {
+    for (proto = protocols; proto; proto = proto->next) {
         if (type == proto->type) {
             errorf("already registered, type=0x%04x", type);
             return -1;
@@ -145,7 +146,6 @@ net_protocol_register(uint16_t type, void (*handler)(const uint8_t *data, size_t
     // プロトコルタイプと入力関数を設定
     proto->type = type;
     proto->handler = handler;
-    // プロトコルリストの先頭に追加
     proto->next = protocols;
     protocols = proto;
     infof("registered, type =0x%04x", type);
@@ -185,7 +185,7 @@ net_input_handler(uint16_t type, const uint8_t *data, size_t len, struct net_dev
             int_raise_irq(INTR_IRQ_SOFTIRQ);
         }
     }
-    //infof("unsupported protocol type=0x%04x", type);
+    infof("unsupported protocol type=0x%04x", type);
     return 0;
 }
 
@@ -253,6 +253,11 @@ net_init(void)
     // 割り込み機能の初期化
     if (intr_init() == -1) {
         errorf("intr_init() failure");
+        return -1;
+    }
+    // ARPを登録
+    if (arp_init() == -1) {
+        errorf("arp_init() failure");
         return -1;
     }
     // IPを初期化

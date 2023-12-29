@@ -49,7 +49,7 @@ icmp_init(void)
     return 0;
 }
 
-static char *
+char *
 icmp_type_ntoa(uint8_t type)
 {
     switch (type) {
@@ -79,7 +79,7 @@ icmp_type_ntoa(uint8_t type)
     return "Unknown";
 }
 
-static void
+void
 icmp_dump(const uint8_t *data, size_t len)
 {
     struct icmp_hdr *hdr;

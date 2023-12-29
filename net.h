@@ -76,8 +76,8 @@ struct net_protocol_queue_entry {
     uint8_t data[];
 };
 
-extern struct
-net_device *net_device_alloc(void);
+extern struct net_device *
+net_device_alloc(void);
 
 extern int
 net_device_register(struct net_device *dev);

@@ -37,13 +37,13 @@ struct icmp_echo {
 extern int
 icmp_init(void);
 
-void
+extern void
 icmp_input(const uint8_t *data, size_t len, ip_addr_t src, ip_addr_t dst, struct ip_iface *iface);
 
-char *
+extern char *
 icmp_type_ntoa(uint8_t);
 
-void
+extern void
 icmp_dump(const uint8_t *data, size_t len);
 
 extern int

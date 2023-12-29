@@ -4,18 +4,13 @@ DRIVERS = driver/dummy.o \
 		  driver/loopback.o \
 
 OBJS = util.o \
-	net.o \
-	ip.o \
-	icmp.o \
-	ether.o \
+       net.o \
+       ether.o \
+       arp.o \
+       ip.o \
+       icmp.o \
 
-TESTS = test/step12.exe \
-#		test/step2.exe \
-#		test/step3.exe \
-#		test/step4.exe \
-#		test/step5.exe \
-#		test/step6.exe \
-#		test/step7.exe \
+TESTS = test/step13.exe \
 
 CFLAGS := $(CFLAGS) -g -W -Wall -Wno-unused-parameter -iquote .
 
