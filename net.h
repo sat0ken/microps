@@ -84,6 +84,12 @@ struct net_timer {
     void (*handler)(void);
 };
 
+struct net_events {
+    struct net_events *next;
+    void (*handler)(void *arg);
+    void *arg;
+};
+
 extern struct net_device *
 net_device_alloc(void);
 
@@ -122,5 +128,14 @@ net_timer_register(struct timeval interval, void (*handler)(void));
 
 extern int
 net_timer_handler(void);
+
+extern int
+net_event_subscribe(void (*handler)(void *arg), void *arg);
+
+extern int
+net_event_handler(void);
+
+extern void
+net_raise_event(void);
 
 #endif

@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 #include "ip.h"
+#include "sched.h"
 
 #define UDP_PCB_SIZE 16
 #define UDP_PCB_STATE_FREE 0
@@ -33,7 +34,8 @@ struct udp_pcb {
     int state;
     struct ip_endpoint local;
     struct queue_head queue;
-    int wc;     // waitカウント(PCBを使用中のスレッド数)
+    // int wc;     // waitカウント(PCBを使用中のスレッド数)
+    struct sched_ctx ctx;
 };
 
 struct udp_query_entry {

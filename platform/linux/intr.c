@@ -118,6 +118,9 @@ intr_thread(void *arg)
                 // 登録されているタイマーを確認するためにnet_timer_handler()を呼び出す
                 net_timer_handler();
                 break;
+            case SIGUSR2:
+                net_event_handler();
+                break;
             default:
                 for (entry = irqs; entry; entry =  entry->next) {
                     if (entry->irq == (unsigned int)sig) {
@@ -174,6 +177,7 @@ intr_init(void)
     sigemptyset(&sigmask);
     sigaddset(&sigmask, SIGHUP);
     sigaddset(&sigmask, SIGUSR1);
+    sigaddset(&sigmask, SIGUSR2);
     sigaddset(&sigmask, SIGALRM);
     return 0;
 }

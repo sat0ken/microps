@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
+#include <errno.h>
 
 #include "util.h"
 #include "ip.h"
@@ -38,6 +39,7 @@ udp_pcb_alloc()
     for(pcb = pcb_list; pcb < tailof(pcb_list); pcb++) {
         if (pcb->state == UDP_PCB_STATE_FREE) {
             pcb->state = UDP_PCB_STATE_OPEN;
+            sched_ctx_init(&pcb->ctx);
             return pcb;
         }
     }
@@ -49,8 +51,9 @@ udp_pcb_release(struct udp_pcb *pcb)
 {
     struct queue_entry *entry;
 
-    if (pcb->wc) {
-        pcb->state = UDP_PCB_STATE_CLOSING;
+    pcb->state = UDP_PCB_STATE_CLOSING;
+    if (sched_ctx_destroy(&pcb->ctx) == -1) {
+        sched_wakeup(&pcb->ctx);
         return;
     }
     pcb->state = UDP_PCB_STATE_FREE;
@@ -156,6 +159,8 @@ udp_input(const uint8_t *data, size_t len, ip_addr_t src_addr, ip_addr_t dst_add
         return;
     }
     debugf("queue pushed: id=%d, num=%d", udp_pcb_id(pcb), pcb->queue.num);
+    // 受信キューにエントリが追加されたらスレッドを起床
+    sched_wakeup(&pcb->ctx);
     mutex_unlock(&mutex);
 }
 
@@ -197,11 +202,29 @@ udp_output(struct ip_endpoint *src, struct ip_endpoint *dst, const uint8_t *data
     return len;
 }
 
+static void
+event_handler(void *arg)
+{
+    struct udp_pcb *pcb;
+    (void)arg;
+    mutex_lock(&mutex);
+    for (pcb = pcb_list; pcb < tailof(pcb_list); pcb++) {
+        if (pcb->state == UDP_PCB_STATE_OPEN) {
+            sched_interrupt(&pcb->ctx);
+        }
+    }
+    mutex_unlock(&mutex);
+}
+
 int
 udp_init(void)
 {
     if (ip_protocol_register(IP_PROTOCOL_UDP, udp_input) == -1) {
         errorf("ip_protocol_register() failure");
+        return -1;
+    }
+    if (net_event_subscribe(event_handler, NULL) == -1) {
+        errorf("net_event_subscribe() failure");
         return -1;
     }
     return 0;
@@ -327,6 +350,7 @@ udp_recvfrom(int id, uint8_t *buf, size_t size, struct ip_endpoint *foreign)
     struct udp_pcb *pcb;
     struct udp_query_entry *entry;
     ssize_t len;
+    int err;
 
     mutex_lock(&mutex);
     // IDからPCBのポインタを取得
@@ -342,14 +366,13 @@ udp_recvfrom(int id, uint8_t *buf, size_t size, struct ip_endpoint *foreign)
         if (entry) {
             break;
         }
-        // waitカウントをインクリメント
-        pcb->wc++;
-        // 受信キューにエントリが追加されるのを待つ
-        mutex_unlock(&mutex);
-        sleep(1);
-        mutex_lock(&mutex);
-        // waitカウントをデクリメント
-        pcb->wc--;
+        err = sched_sleep(&pcb->ctx, &mutex, NULL);
+        if (err) {
+            debugf("interrupted");
+            mutex_unlock(&mutex);
+            errno = EINTR;
+            return -1;
+        }
         // Close状態だったら解放してエラーを返す
         if (pcb->state == UDP_PCB_STATE_CLOSING) {
             debugf("closed");
