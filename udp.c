@@ -12,7 +12,7 @@
 #include "platform.h"
 
 static mutex_t mutex = MUTEX_INITIALIZER;
-static struct udp_pcb pcb_list[UDP_PCB_SIZE];
+static struct udp_pcb udp_pcb_list[UDP_PCB_SIZE];
 
 static void
 udp_dump(const uint8_t *data, size_t len)
@@ -36,7 +36,7 @@ static struct udp_pcb *
 udp_pcb_alloc()
 {
     struct udp_pcb *pcb;
-    for(pcb = pcb_list; pcb < tailof(pcb_list); pcb++) {
+    for(pcb = udp_pcb_list; pcb < tailof(udp_pcb_list); pcb++) {
         if (pcb->state == UDP_PCB_STATE_FREE) {
             pcb->state = UDP_PCB_STATE_OPEN;
             sched_ctx_init(&pcb->ctx);
@@ -72,7 +72,7 @@ static struct udp_pcb *
 udp_pcb_select(ip_addr_t addr, uint16_t port)
 {
     struct udp_pcb *pcb;
-    for (pcb = pcb_list; pcb < tailof(pcb_list); pcb++) {
+    for (pcb = udp_pcb_list; pcb < tailof(udp_pcb_list); pcb++) {
         if (pcb->state == UDP_PCB_STATE_OPEN) {
             if ((pcb->local.addr == IP_ADDR_ANY || addr == IP_ADDR_ANY || pcb->local.addr == addr) && pcb->local.port == port) {
                 return pcb;
@@ -86,10 +86,10 @@ static struct udp_pcb *
 udp_pcb_get(int id)
 {
     struct udp_pcb *pcb;
-    if (id < 0 || id >= (int) countof(pcb_list)) {
+    if (id < 0 || id >= (int) countof(udp_pcb_list)) {
         return NULL;
     }
-    pcb = &pcb_list[id];
+    pcb = &udp_pcb_list[id];
     if (pcb->state != UDP_PCB_STATE_OPEN) {
         return NULL;
     }
@@ -99,7 +99,7 @@ udp_pcb_get(int id)
 static int
 udp_pcb_id(struct udp_pcb *pcb)
 {
-    return indexof(pcb_list, pcb);
+    return indexof(udp_pcb_list, pcb);
 }
 
 static void
@@ -178,13 +178,16 @@ udp_output(struct ip_endpoint *src, struct ip_endpoint *dst, const uint8_t *data
         errorf("too long");
         return -1;
     }
+    // UDPヘッダの生成
     hdr = (struct udp_hdr *)buf;
     hdr->src_port = src->port;
     hdr->dst_port = dst->port;
     total = sizeof(*hdr) + len;
     hdr->len = hton16(total);
     hdr->sum = 0;
+    // データをコピー
     memcpy(hdr + 1, data, len);
+    // UDPダミーヘッダの生成
     pseudo.src_addr = src->addr;
     pseudo.dst_addr = dst->addr;
     pseudo.zero = 0;
@@ -208,7 +211,7 @@ event_handler(void *arg)
     struct udp_pcb *pcb;
     (void)arg;
     mutex_lock(&mutex);
-    for (pcb = pcb_list; pcb < tailof(pcb_list); pcb++) {
+    for (pcb = udp_pcb_list; pcb < tailof(udp_pcb_list); pcb++) {
         if (pcb->state == UDP_PCB_STATE_OPEN) {
             sched_interrupt(&pcb->ctx);
         }
