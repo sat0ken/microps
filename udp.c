@@ -105,7 +105,7 @@ udp_pcb_id(struct udp_pcb *pcb)
 static void
 udp_input(const uint8_t *data, size_t len, ip_addr_t src_addr, ip_addr_t dst_addr, struct ip_iface *iface)
 {
-    struct pseudo_hdr pseudo;
+    struct udp_pseudo_hdr pseudo;
     uint16_t psum = 0;
     struct udp_hdr *hdr;
     char addr1[IP_ADDR_STR_LEN];
@@ -169,7 +169,7 @@ udp_output(struct ip_endpoint *src, struct ip_endpoint *dst, const uint8_t *data
 {
     uint8_t buf[IP_PAYLOAD_SIZE_MAX];
     struct udp_hdr *hdr;
-    struct pseudo_hdr pseudo;
+    struct udp_pseudo_hdr pseudo;
     uint16_t total, psum = 0;
     char ep1[IP_ENDPOINT_STR_LEN];
     char ep2[IP_ENDPOINT_STR_LEN];

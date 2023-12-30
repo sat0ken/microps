@@ -474,7 +474,7 @@ ip_protocol_register(uint8_t type, void(*handler)(const uint8_t *data, size_t le
 {
     struct ip_protocol *entry;
     // 重複登録の確認
-    for (entry = ip_protocols; entry; entry = ip_protocols->next) {
+    for (entry = ip_protocols; entry; entry = entry->next) {
         if (type == entry->type) {
             errorf("already registered type=%u", type);
             return -1;

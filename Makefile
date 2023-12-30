@@ -10,8 +10,9 @@ OBJS = util.o \
        ip.o \
        icmp.o \
        udp.o \
+       tcp.o \
 
-TESTS = test/step21.exe \
+TESTS = test/step22.exe \
 
 CFLAGS := $(CFLAGS) -g -W -Wall -Wno-unused-parameter -iquote .
 

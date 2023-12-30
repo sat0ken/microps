@@ -10,6 +10,7 @@
 #include "icmp.h"
 #include "arp.h"
 #include "udp.h"
+#include "tcp.h"
 
 static struct net_device *devices;
 static struct net_protocol *protocols;
@@ -277,6 +278,12 @@ net_init(void)
         errorf("udp_init() failure");
         return -1;
     }
+    // TCPを登録
+    if (tcp_init() == -1) {
+        errorf("tcp_init() failure");
+        return -1;
+    }
+
     infof("initialized");
     return 0;
 }
