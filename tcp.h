@@ -18,6 +18,9 @@
 #define TCP_STATE_CLOSE_WAIT    10
 #define TCP_STATE_LAST_ACK      11
 
+#define TCP_DEFAULT_RTO 200000
+#define TCP_RETRANSMIT_DEADLINE 12
+
 // ダミーヘッダの構造体
 struct tcp_pseudo_hdr {
     uint32_t src_addr;
@@ -73,6 +76,17 @@ struct tcp_pcb {
     uint16_t mss;
     uint8_t buf[65535];
     struct sched_ctx ctx;
+    struct queue_head queue;
+};
+
+struct tcp_queue_entry {
+    struct timeval first;
+    struct timeval last;
+    unsigned int rto;
+    uint32_t seq;
+    uint8_t flg;
+    size_t len;
+    uint8_t data[];
 };
 
 extern int

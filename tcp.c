@@ -93,16 +93,10 @@ static struct tcp_pcb *
 tcp_pcb_select(struct ip_endpoint *local, struct ip_endpoint *foreign)
 {
     struct tcp_pcb *pcb, *listen_pcb = NULL;
-//    char ep1[IP_ENDPOINT_STR_LEN];
-//    char ep2[IP_ENDPOINT_STR_LEN];
 
     for (pcb = tcp_pcb_list; pcb < tailof(tcp_pcb_list); pcb++) {
         if ((pcb->local.addr == IP_ADDR_ANY || pcb->local.addr == local->addr) && pcb->local.port == local->port) {
             if (!foreign) {
-//                debugf("return local pcb");
-//                debugf("%s => %s",
-//                       ip_endpoint_ntop(local, ep1, sizeof(ep1)),
-//                       ip_endpoint_ntop(foreign, ep2, sizeof(ep2)));
                 return pcb;
             }
             if (pcb->foreign.addr == foreign->addr && pcb->foreign.port == foreign->port) {
@@ -188,6 +182,76 @@ tcp_output_segment(uint32_t seq, uint32_t ack, uint8_t flg, uint16_t wnd, uint8_
     return len;
 }
 
+static int
+tcp_retransmit_queue_add(struct tcp_pcb *pcb, uint32_t seq, uint8_t flg, uint8_t *data, size_t len)
+{
+    struct tcp_queue_entry *entry;
+
+    entry = memory_alloc(sizeof(*entry) + len);
+    if (!entry) {
+        errorf("memory_alloc() failure");
+        return -1;
+    }
+    entry->rto = TCP_DEFAULT_RTO;
+    entry->seq = seq;
+    entry->flg = flg;
+    entry->len = len;
+    memcpy(entry->data, data, entry->len);
+    gettimeofday(&entry->first, NULL);
+    entry->last = entry->first;
+    if (!queue_push(&pcb->queue, entry)) {
+        errorf("queue_push() failure");
+        memory_free(entry);
+        return -1;
+    }
+    return 0;
+}
+
+static void
+tcp_retransmit_queue_cleanup(struct tcp_pcb *pcb)
+{
+    struct tcp_queue_entry *entry;
+
+    while (1) {
+        entry = queue_peek(&pcb->queue);
+        if (!entry) {
+            break;
+        }
+        if (entry->seq >= pcb->snd.una) {
+            break;
+        }
+        entry = queue_pop(&pcb->queue);
+        debugf("remove, seq=%u, flags=%s, len=%u", entry->seq, tcp_flg_ntoa(entry->flg), entry->len);
+        memory_free(entry);
+    }
+    return;
+}
+
+static void
+tcp_retransmit_queue_emit(void *arg, void *data)
+{
+    struct tcp_pcb *pcb;
+    struct tcp_queue_entry *entry;
+    struct timeval now, diff, timeout;
+
+    pcb = (struct tcp_pcb *)arg;
+    entry = (struct tcp_queue_entry *)data;
+    gettimeofday(&now, NULL);
+    timersub(&now, &entry->first, &diff);
+    if (diff.tv_sec >= TCP_RETRANSMIT_DEADLINE) {
+        pcb->state = TCP_STATE_CLOSED;
+        sched_wakeup(&pcb->ctx);
+        return;
+    }
+    timeout = entry->last;
+    timeval_add_usec(&timeout, entry->rto);
+    if (timercmp(&now, &timeout, >)) {
+        tcp_output_segment(entry->seq, pcb->rcv.nxt, entry->flg, pcb->rcv.wnd, entry->data, entry->len, &pcb->local, &pcb->foreign);
+        entry->last = now;
+        entry->rto *= 2;
+    }
+}
+
 static ssize_t
 tcp_output(struct tcp_pcb *pcb, uint8_t flg, uint8_t *data, size_t len)
 {
@@ -197,7 +261,7 @@ tcp_output(struct tcp_pcb *pcb, uint8_t flg, uint8_t *data, size_t len)
         seq = pcb->iss;
     }
     if (TCP_FLG_ISSET(flg, TCP_FLG_SYN | TCP_FLG_FIN) || len) {
-        // Todo: add retransmission queue
+        tcp_retransmit_queue_add(pcb, seq, flg, data, len);
     }
     return tcp_output_segment(seq, pcb->rcv.nxt, flg, pcb->rcv.wnd, data, len, &pcb->local, &pcb->foreign);
 }
@@ -252,9 +316,37 @@ tcp_segment_arrives(struct tcp_segment_info *seg, uint8_t flags, uint8_t *data, 
             return;
         case TCP_STATE_SYN_SENT:
             // 1st check ACK bit
+            if (seg->ack <= pcb->iss || seg->ack > pcb->snd.nxt) {
+                tcp_output_segment(seg->ack, 0, TCP_FLG_RST, 0, NULL, 0, local, foreign);
+                return;
+            }
+            if (pcb->snd.una <= seg->ack && seg->ack <= pcb->snd.nxt) {
+                acceptable = 1;
+            }
             // 2nd check RST bit
             // 3rd check security and precedure
             // 4th check SYN bit
+            if (TCP_FLG_ISSET(flags, TCP_FLG_SYN)) {
+                pcb->rcv.nxt = seg->seq + 1;
+                pcb->irs = seg->seq;
+                if (acceptable) {
+                    pcb->snd.una = seg->ack;
+                    tcp_retransmit_queue_cleanup(pcb);
+                }
+                if (pcb->snd.una > pcb->iss) {
+                    pcb->state = TCP_STATE_ESTABLISHED;
+                    tcp_output(pcb, TCP_FLG_ACK, NULL, 0);
+                    pcb->snd.wnd = seg->wnd;
+                    pcb->snd.wl1 = seg->seq;
+                    pcb->snd.wl2 = seg->ack;
+                    sched_wakeup(&pcb->ctx);
+                    return;
+                } else {
+                    pcb->state = TCP_STATE_SYN_RECEIVED;
+                    tcp_output(pcb, TCP_FLG_SYN | TCP_FLG_ACK, NULL, 0);
+                    return;
+                }
+            }
             // 5th if neither of the SYN or RST bits is set then drop the segment and return
             // drop segment
             return;
@@ -315,6 +407,7 @@ tcp_segment_arrives(struct tcp_segment_info *seg, uint8_t flags, uint8_t *data, 
             if (pcb->snd.una < seg->ack && seg->ack <= pcb->snd.nxt) {
                 // 確認済のシーケンス番号を更新
                 pcb->snd.una = seg->ack;
+                tcp_retransmit_queue_cleanup(pcb);
                 if (pcb->snd.wl1 < seg->seq || (pcb->snd.wl1 == seg->seq && pcb->snd.wl2 <= seg->ack)) {
                     pcb->snd.wnd = seg->wnd;
                     pcb->snd.wl1 = seg->seq;
@@ -409,6 +502,20 @@ tcp_input(const uint8_t *data, size_t len, ip_addr_t src_addr, ip_addr_t dst_add
 }
 
 static void
+tcp_timer(void)
+{
+    struct tcp_pcb *pcb;
+    mutex_lock(&mutex);
+    for (pcb = tcp_pcb_list; pcb < tailof(tcp_pcb_list); pcb++) {
+        if (pcb->state == TCP_STATE_FREE) {
+            continue;
+        }
+        queue_foreach(&pcb->queue, tcp_retransmit_queue_emit, pcb);
+    }
+    mutex_unlock(&mutex);
+}
+
+static void
 event_handler(void *arg)
 {
     struct tcp_pcb *pcb;
@@ -424,8 +531,13 @@ event_handler(void *arg)
 int
 tcp_init(void)
 {
+    struct timeval interval = {0, 100000};
     if (ip_protocol_register(IP_PROTOCOL_TCP, tcp_input) == -1) {
         errorf("ip_protocol_register() failure");
+        return -1;
+    }
+    if (net_timer_register(interval, tcp_timer) == -1) {
+        errorf("net_timer_register() failure");
         return -1;
     }
     net_event_subscribe(event_handler, NULL);
@@ -448,10 +560,24 @@ tcp_open_rfc793(struct ip_endpoint *local, struct ip_endpoint *foreign, int acti
         return -1;
     }
     if (active) {
-        errorf("active open does not implement");
-        tcp_pcb_release(pcb);
-        mutex_unlock(&mutex);
-        return -1;
+        debugf("active open: local=%s, foreign=%s, connecting...",
+               ip_endpoint_ntop(local, addr1, sizeof(addr1)),
+               ip_endpoint_ntop(foreign, addr2, sizeof(addr2)));
+        pcb->local = *local;
+        pcb->foreign = *foreign;
+        pcb->rcv.wnd = sizeof(pcb->buf);
+        pcb->iss = random();
+        if (tcp_output(pcb, TCP_FLG_SYN, NULL, 0) == -1) {
+            errorf("tcp_output() failure");
+            pcb->state = TCP_STATE_CLOSED;
+            tcp_pcb_release(pcb);
+            mutex_unlock(&mutex);
+            return -1;
+        }
+        pcb->snd.una = pcb->iss;
+        pcb->snd.nxt = pcb->iss + 1;
+        pcb->state = TCP_STATE_SYN_SENT;
+
     } else {
         debugf("passive open: local=%s, waiting connection...", ip_endpoint_ntop(local, addr1, sizeof(addr1)));
         pcb->local = *local;
