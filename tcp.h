@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include "sched.h"
+#include "ip.h"
 
 #define TCP_STATE_FREE          0
 #define TCP_STATE_CLOSED        1
@@ -76,5 +77,11 @@ struct tcp_pcb {
 
 extern int
 tcp_init(void);
+
+extern int
+tcp_open_rfc793(struct ip_endpoint *local, struct ip_endpoint *foreign, int active);
+
+extern int
+tcp_close(int id);
 
 #endif
