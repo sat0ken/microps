@@ -12,7 +12,7 @@ OBJS = util.o \
        udp.o \
        tcp.o \
 
-TESTS = test/step22.exe \
+TESTS = test/step23.exe \
 
 CFLAGS := $(CFLAGS) -g -W -Wall -Wno-unused-parameter -iquote .
 
